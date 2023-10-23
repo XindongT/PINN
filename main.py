@@ -17,8 +17,8 @@ def main():
     Nt = 100
     range_x = [0,1]
     range_t = [0,1]
-    iteration = 5000
-    learning_rate = 1e-2
+    iteration = 10000
+    learning_rate = 1e-3
 
     #transport equation
     t_equation = lambda x: np.cos(2*np.pi * (x[0]-2 * x[1]))
@@ -26,7 +26,6 @@ def main():
     u = cos(2pi(x-2t))
     ut + 2ux = 0
     x,t in [0,1]^2
-    
     '''
     transport_equation = Pde(2, [[0,1],[0,1]], t_equation, time_dependency = True)
     mesh = mesh_2D(Nx, Nt, range_x, range_t)

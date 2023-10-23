@@ -68,7 +68,7 @@ def train(pde,net,mesh_point,lr=1e-3, iteration = 5000, save = True, model_name 
         # computing the loss of u(0,t)
 
 
-        loss3 = loss_fun(net(u_boundary_right),net(u_boundary_left))
+        loss3 = loss_fun(net(u_boundary_right),u_boundary_right_y)
         # computing the loss of u(L,t)
 
 
