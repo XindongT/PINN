@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 
 class FNN(nn.Module):
@@ -10,13 +11,13 @@ class FNN(nn.Module):
         self.output_layer = nn.Linear(NN, 1)
 
     def forward(self, x):
-        out = self.act(self.input_layer(x))
+        out = self.input_layer(x)
         for layer in self.hidden_layer:
             out = self.act(layer(out))
         out = self.output_layer(out)
         return out
 
     def act(self, x):
-        return torch.sigmoid(x)
+        return F.sigmoid(x)
 
 

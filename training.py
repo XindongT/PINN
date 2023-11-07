@@ -2,7 +2,7 @@ from torch.autograd import Variable
 from NN import *
 import os
 import copy
-from samples_gen import load_mesh,save_data
+from utils import load_mesh,save_data
 
 
 def train(net, optimizer, loss_fun, pde, iteration = 5000, validation_set = None ,save = True, model_name = 'Model', CUDA = True, path = '', file_name = None):
@@ -23,12 +23,11 @@ def train(net, optimizer, loss_fun, pde, iteration = 5000, validation_set = None
 
     interior_points, u_initial, u_boundary_left, u_boundary_right, collocation_points = load_mesh(file_name, path)
 
-    u_initial_y = torch.from_numpy(pde.solutions(u_initial)).float().to(device)
-    u_boundary_left_y = torch.from_numpy(pde.solutions(u_boundary_left)).float().to(device)
-    u_boundary_right_y = torch.from_numpy(pde.solutions(u_boundary_right)).float().to(device)
+    u_initial_y = torch.from_numpy(pde.solutions(u_initial)).float().to(device).unsqueeze(-1)
+    u_boundary_left_y = torch.from_numpy(pde.solutions(u_boundary_left)).float().to(device).unsqueeze(-1)
+    u_boundary_right_y = torch.from_numpy(pde.solutions(u_boundary_right)).float().to(device).unsqueeze(-1)
     RHS = torch.zeros([len(collocation_points), 1],device = device)
-    collocation_points_y = torch.from_numpy(pde.solutions(collocation_points)).float().to(device)
-
+    collocation_points_y = torch.from_numpy(pde.solutions(collocation_points)).float().to(device).unsqueeze(-1)
 
     interior_points = interior_points.float().to(device)
     u_initial = u_initial.float().to(device)
@@ -53,18 +52,16 @@ def train(net, optimizer, loss_fun, pde, iteration = 5000, validation_set = None
         collocation_points_val_y = collocation_points
 
     for i in range(iteration):
-        interior_points = Variable(interior_points, requires_grad=True)
-        u_boundary_left = Variable(u_boundary_left, requires_grad = True)
-        u_boundary_right = Variable(u_boundary_right, requires_grad = True)
-        u_initial = Variable(u_initial, requires_grad = True)
+        # interior_points = Variable(interior_points, requires_grad=True)
+        # u_boundary_left = Variable(u_boundary_left, requires_grad = True)
+        # u_boundary_right = Variable(u_boundary_right, requires_grad = True)
+        # u_initial = Variable(u_initial, requires_grad = True)
         collocation_points = Variable(collocation_points,requires_grad = True)
 
-
-        du = torch.autograd.grad(net(collocation_points), collocation_points, grad_outputs=torch.ones_like(net(collocation_points)), create_graph=True)
-        ux = du[0][:, 0].unsqueeze(-1).to(device)
-        ut = du[0][:, 1].unsqueeze(-1).to(device)
-
-        optimizer.zero_grad()
+        du = torch.autograd.grad(inputs = collocation_points, outputs = net(collocation_points), grad_outputs=torch.ones_like(net(collocation_points)), create_graph=True)[0]
+        ux = du[:, 0].unsqueeze(-1).to(device)
+        ut = du[:, 1].unsqueeze(-1).to(device)
+        LHS = ut + 2 * ux
 
         # loss function:
         loss1 = loss_fun(net(u_initial), u_initial_y)
@@ -76,10 +73,10 @@ def train(net, optimizer, loss_fun, pde, iteration = 5000, validation_set = None
         loss3 = loss_fun(net(u_boundary_right), u_boundary_right_y)
         # computing the loss of u(L,t)
 
-        loss4 = loss_fun(ut + 2 * ux, RHS)
+        loss4 = loss_fun(LHS, RHS)
         # computing the loss of u_t + 2u_x = 0
 
-        loss = 2*loss1 + 2*loss2 + 2*loss3 + loss4
+        loss = loss1 + loss2 + loss3 + loss4
         pde_loss = loss4
         boundary_loss = loss2 + loss3
         initial_loss = loss1
@@ -87,6 +84,7 @@ def train(net, optimizer, loss_fun, pde, iteration = 5000, validation_set = None
 
         loss.backward()
         optimizer.step()
+        optimizer.zero_grad()
 
         total_loss.append(loss.item())
         loss_on_pde.append(pde_loss.item())
@@ -126,14 +124,22 @@ def train(net, optimizer, loss_fun, pde, iteration = 5000, validation_set = None
             model_path = os.path.join(path, 'data/' + model_name)
             os.makedirs(model_path, exist_ok = True)
             os.makedirs(model_path + '/Loss', exist_ok=True)
-
+            os.makedirs(model_path + '/training_data', exist_ok=True)
 
         torch.save(net, model_path + f'/{model_name}.pt')
+
         loss_path = model_path + '/Loss'
         save_data(total_loss,'total_loss',loss_path)
         save_data(loss_on_pde, 'pde_loss', loss_path)
         save_data(loss_on_initial, 'initial_loss', loss_path)
         save_data(loss_on_boundary, 'boundary_loss', loss_path)
+
+        training_path = model_path + '/training_data'
+        save_data(u_initial_y,'intial_condition_y',training_path)
+        save_data(u_boundary_left_y,'boundary_left_y',training_path)
+        save_data(u_boundary_right_y,'boundary_right_y',training_path)
+        save_data(collocation_points_y,'collocation_points_y',training_path)
+        #save_data(pde,'pde_object',training_path)
 
         if validation_set is not None:
             best_model_path = model_path + '/model_best'
